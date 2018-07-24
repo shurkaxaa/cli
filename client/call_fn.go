@@ -7,10 +7,13 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"strings"
 
 	"github.com/fnproject/fn_go/provider"
+	"github.com/go-openapi/runtime/logger"
+	"github.com/urfave/cli"
 )
 
 const (
@@ -40,7 +43,7 @@ type callID struct {
 	Error  apiErr `json:"error"`
 }
 
-func CallFN(provider provider.Provider, appName string, route string, content io.Reader, output io.Writer, method string, env []string, contentType string, includeCallID bool) error {
+func CallFN(ctx *cli.Context, provider provider.Provider, appName string, route string, content io.Reader, output io.Writer, method string, env []string, contentType string, includeCallID bool) error {
 	u, err := provider.CallURL(appName)
 	if err != nil {
 		return err
@@ -86,6 +89,14 @@ func CallFN(provider provider.Provider, appName string, route string, content io
 	transport := provider.WrapCallTransport(http.DefaultTransport)
 	httpClient := http.Client{Transport: transport}
 
+	if logger.DebugEnabled() || ctx.GlobalBool("verbose") {
+		b, err := httputil.DumpRequestOut(req, content != nil)
+		if err != nil {
+			return err
+		}
+		fmt.Printf(string(b) + "\n")
+	}
+
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("Error running route: %s", err)
@@ -113,6 +124,14 @@ func CallFN(provider provider.Provider, appName string, route string, content io
 		} else {
 			return err
 		}
+	}
+
+	if logger.DebugEnabled() || ctx.GlobalBool("verbose") {
+		b, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			return err
+		}
+		fmt.Printf(string(b) + "\n")
 	}
 
 	if resp.StatusCode >= 400 {
